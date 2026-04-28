@@ -120,7 +120,7 @@ public class GroheOndusSenseGuardHandler<T, M> extends GroheOndusBaseHandler<App
         ZonedDateTime latestWithdrawal = earliestWithdrawal.plus(1, ChronoUnit.DAYS);
 
         Double waterConsumption = dataPoint.getWithdrawals().stream()
-                .filter(e -> earliestWithdrawal.isBefore(LocalDate.parse(e.date).atStartOfDay(ZoneId.systemDefault()))
+                .filter(e -> !earliestWithdrawal.isAfter(LocalDate.parse(e.date).atStartOfDay(ZoneId.systemDefault()))
                         && latestWithdrawal.isAfter(LocalDate.parse(e.date).atStartOfDay(ZoneId.systemDefault())))
                 .mapToDouble(withdrawal -> withdrawal.getWaterconsumption()).sum();
         return new QuantityType<>(waterConsumption, Units.LITRE);
@@ -208,7 +208,8 @@ public class GroheOndusSenseGuardHandler<T, M> extends GroheOndusBaseHandler<App
     }
 
     private Instant fromTime() {
-        Instant from = Instant.now().minus(DEFAULT_TIMEFRAME_DAYS, ChronoUnit.DAYS);
+        Instant from = ZonedDateTime.now(ZoneId.systemDefault()).truncatedTo(ChronoUnit.DAYS)
+                .minusDays(DEFAULT_TIMEFRAME_DAYS - 1L).toInstant();
         Channel waterconsumptionChannel = this.thing.getChannel(CHANNEL_WATERCONSUMPTION);
         if (waterconsumptionChannel == null) {
             return from;
@@ -220,14 +221,15 @@ public class GroheOndusSenseGuardHandler<T, M> extends GroheOndusBaseHandler<App
         }
 
         int timeframe = ((BigDecimal) timeframeConfig).intValue();
-        if (timeframe < MIN_API_TIMEFRAME_DAYS && timeframe > MAX_API_TIMEFRAME_DAYS) {
+        if (timeframe < MIN_API_TIMEFRAME_DAYS || timeframe > MAX_API_TIMEFRAME_DAYS) {
             logger.info(
                     "timeframe configuration of waterconsumption channel needs to be a number between 1 to 90, got {}",
                     timeframe);
             return from;
         }
 
-        return Instant.now().minus(timeframe, ChronoUnit.DAYS);
+        return ZonedDateTime.now(ZoneId.systemDefault()).truncatedTo(ChronoUnit.DAYS).minusDays(timeframe - 1L)
+                .toInstant();
     }
 
     @Override
